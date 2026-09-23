@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard ห้องพยาบาล — บันทึกบริการรายวัน</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --green:#16a34a; --green-d:#15803d; --green-l:#dcfce7;
+  --blue:#0284c7; --blue-d:#0369a1; --blue-l:#e0f2fe;
+  --border:#e5e7eb; --text:#1f2937; --muted:#6b7280;
+  --shadow:0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,'Sarabun',sans-serif;background:#f8fafc;color:var(--text);}
+header{background:linear-gradient(90deg,var(--green) 0%,var(--blue) 100%);color:#fff;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;box-shadow:var(--shadow);position:sticky;top:0;z-index:50;}
+header h1{font-size:1.2rem;margin:0;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+header .tzbadge{font-size:.68rem;background:rgba(255,255,255,.25);padding:3px 9px;border-radius:999px;font-weight:600;}
+header .actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.btn{background:#fff;color:var(--green-d);border:none;padding:9px 16px;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;transition:.15s;}
+.btn:hover{transform:translateY(-1px);box-shadow:var(--shadow);}
+.btn.blue{color:var(--blue-d);}
+.btn.outline{background:transparent;color:#fff;border:1px solid #fff;}
+#fileInput{display:none;}
+#fileName{font-size:.75rem;color:#eafff0;}
+main{padding:20px;max-width:1500px;margin:0 auto;}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:var(--shadow);margin-bottom:20px;}
+.card h2{font-size:1rem;margin:0 0 12px;color:var(--green-d);display:flex;align-items:center;gap:8px;}
+.card h2::before{content:'';width:6px;height:16px;background:linear-gradient(var(--green),var(--blue));border-radius:3px;}
+.filters-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;}
+.filter-block label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:4px;font-weight:600;}
+.filter-block input[type=date],.filter-block input[type=text]{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:.85rem;}
+.radio-row{display:flex;gap:8px;}
+.radio-row button{flex:1;padding:6px;border-radius:8px;border:1px solid var(--border);background:#f9fafb;font-size:.78rem;cursor:pointer;}
+.radio-row button.active{background:linear-gradient(90deg,var(--green),var(--blue));color:#fff;border-color:transparent;}
+
+/* ===== Dropdown Multi-select (ใหม่) ===== */
+.dropdown-multi{position:relative;}
+.dropdown-toggle{width:100%;text-align:left;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#f9fafb;font-size:.8rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;color:var(--text);}
+.dropdown-toggle::after{content:'▾';color:var(--muted);margin-left:8px;font-size:.7rem;}
+.dropdown-toggle.has-selection{border-color:var(--green);color:var(--green-d);font-weight:700;background:var(--green-l);}
+.dropdown-toggle:hover{border-color:var(--blue);}
+.dropdown-panel{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,.15);z-index:70;max-height:290px;flex-direction:column;overflow:hidden;}
+.dropdown-panel.open{display:flex;}
+.dropdown-actions{display:flex;gap:6px;padding:8px;border-bottom:1px solid var(--border);background:#fafafa;flex-shrink:0;}
+.dropdown-actions button{flex:1;padding:6px;font-size:.72rem;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer;font-weight:700;color:var(--blue-d);}
+.dropdown-actions button:hover{background:var(--blue-l);}
+.dropdown-options{overflow-y:auto;padding:6px;}
+.dropdown-option{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:.8rem;}
+.dropdown-option:hover{background:#f0fdf4;}
+.dropdown-option input{cursor:pointer;width:15px;height:15px;flex-shrink:0;accent-color:var(--green);}
+.dropdown-option span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dropdown-empty{padding:14px;text-align:center;color:var(--muted);font-size:.78rem;}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;}
+.kpi{background:linear-gradient(135deg,var(--green-l),var(--blue-l));border-radius:12px;padding:14px 16px;border:1px solid var(--border);}
+.kpi .label{font-size:.75rem;color:var(--muted);font-weight:600;}
+.kpi .value{font-size:1.6rem;font-weight:700;color:var(--green-d);margin-top:4px;}
+.kpi .sub{font-size:.72rem;color:var(--blue-d);margin-top:2px;}
+.charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:18px;}
+.chart-box{position:relative;height:300px;}
+.chart-box.tall{height:360px;}
+.chart-box.full{height:340px;}
+.hint{font-size:.72rem;color:var(--muted);margin-top:6px;}
+.chart-error{font-size:.78rem;color:#b91c1c;background:#fef2f2;border:1px dashed #fca5a5;border-radius:8px;padding:10px;text-align:center;}
+.table-wrap{max-height:600px;overflow:auto;border:1px solid var(--border);border-radius:10px;}
+table{border-collapse:collapse;width:100%;font-size:.78rem;}
+th,td{padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis;}
+th{background:var(--green-l);position:sticky;top:0;color:var(--green-d);z-index:2;}
+tr:hover td{background:#f0fdf4;}
+#globalSearch{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:10px;font-size:.9rem;margin-bottom:12px;}
+.repeat-detail{margin-top:10px;padding:10px;border:1px dashed var(--blue);border-radius:8px;font-size:.8rem;background:var(--blue-l);display:none;}
+.badge{display:inline-block;background:var(--green);color:#fff;border-radius:999px;padding:2px 8px;font-size:.65rem;margin-left:6px;font-weight:600;}
+.count-note{font-size:.72rem;color:var(--muted);margin-top:4px;}
+footer{text-align:center;color:var(--muted);font-size:.75rem;padding:20px;}
+::-webkit-scrollbar{height:8px;width:8px;}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px;}
+#emptyState{max-width:620px;margin:60px auto;text-align:center;padding:50px 30px;background:#fff;border:2px dashed var(--blue);border-radius:16px;}
+#emptyState .icon{font-size:3rem;margin-bottom:10px;}
+#emptyState h2{color:var(--green-d);margin:0 0 10px;}
+#emptyState p{color:var(--muted);font-size:.9rem;margin-bottom:20px;line-height:1.6;}
+#emptyState .btn.blue{background:linear-gradient(90deg,var(--green),var(--blue));color:#fff;padding:12px 28px;font-size:.95rem;}
+#dashboardContent{display:none;}
+#loadingOverlay{display:none;position:fixed;inset:0;background:rgba(255,255,255,.85);z-index:100;align-items:center;justify-content:center;flex-direction:column;gap:10px;}
+.spinner{width:40px;height:40px;border:4px solid var(--green-l);border-top-color:var(--green);border-radius:50%;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#diagBanner{display:none;background:#ecfdf5;border:1px solid var(--green);color:var(--green-d);padding:10px 16px;border-radius:10px;font-size:.82rem;margin-bottom:16px;}
+#errBanner{display:none;background:#fef2f2;border:1px solid #fca5a5;color:#b91c1c;padding:10px 16px;border-radius:10px;font-size:.82rem;margin-bottom:16px;white-space:pre-wrap;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🩺 Health Service Dashboard บริการห้องพยาบาล <span class="tzbadge">🇹🇭 ข้อมูลตามเวลาไทย</span></h1>
+  <div class="actions">
+    <span id="fileName"></span>
+    <button class="btn outline" id="btnClear">ล้างตัวกรองทั้งหมด</button>
+    <button class="btn blue" id="btnUpload">⬆️ อัปโหลดไฟล์ Excel</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+  </div>
+</header>
+
+<div id="loadingOverlay"><div class="spinner"></div><div>กำลังประมวลผลไฟล์...</div></div>
+
+<main>
+  <div id="emptyState">
+    <div class="icon">📊</div>
+    <h2>ยังไม่มีข้อมูล</h2>
+    <p>กรุณาอัปโหลดไฟล์ Excel (data_690801-690915.xlsx หรือไฟล์อัปเดตใหม่) ที่มี Sheet "บันทึกบริการรายวัน" และ Sheet รายการใช้ยา เพื่อเริ่มต้นแสดงผล Dashboard</p>
+    <button class="btn blue" id="btnUploadBig">⬆️ เลือกไฟล์ Excel เพื่อเริ่มต้น</button>
+  </div>
+
+  <div id="dashboardContent">
+    <div id="diagBanner"></div>
+    <div id="errBanner"></div>
+
+    <div class="card">
+      <h2>ตัวกรองข้อมูล</h2>
+      <div class="filters-grid">
+        <div class="filter-block">
+          <label>วันที่เริ่มต้น</label>
+          <input type="date" id="dateStart">
+        </div>
+        <div class="filter-block">
+          <label>วันที่สิ้นสุด</label>
+          <input type="date" id="dateEnd">
+        </div>
+        <div class="filter-block">
+          <label>Bed rest</label>
+          <div class="radio-row" data-dim="bedrest">
+            <button data-val="all" class="active">ทั้งหมด</button>
+            <button data-val="มี">มี</button>
+            <button data-val="ไม่มี">ไม่มี</button>
+          </div>
+        </div>
+        <div class="filter-block">
+          <label>Refer</label>
+          <div class="radio-row" data-dim="refer">
+            <button data-val="all" class="active">ทั้งหมด</button>
+            <button data-val="มี">มี</button>
+            <button data-val="ไม่มี">ไม่มี</button>
+          </div>
+        </div>
+        <div class="filter-block">
+          <label>อุบัติเหตุ</label>
+          <div class="radio-row" data-dim="accident">
+            <button data-val="all" class="active">ทั้งหมด</button>
+            <button data-val="มี">มี</button>
+            <button data-val="ไม่มี">ไม่มี</button>
+          </div>
+        </div>
+        <div class="filter-block">
+          <label>BLUE plaster</label>
+          <div class="radio-row" data-dim="plaster">
+            <button data-val="all" class="active">ทั้งหมด</button>
+            <button data-val="มี">มี</button>
+            <button data-val="ไม่มี">ไม่มี</button>
+          </div>
+        </div>
+        <div class="filter-block" style="grid-column:1/-1">
+          <label>ค้นหาในหมายเหตุ</label>
+          <input type="text" id="noteSearch" placeholder="พิมพ์คำค้นหาในหมายเหตุ...">
+        </div>
+
+        <!-- ===== Dropdown Multi-select 4 ตัว (ใหม่) ===== -->
+        <div class="filter-block" style="grid-column:span 2">
+          <label>แผนก (เลือกได้หลายค่า)</label>
+          <div class="dropdown-multi" data-dim="dept">
+            <button type="button" class="dropdown-toggle" id="ddDeptToggle">แผนก: ทั้งหมด</button>
+            <div class="dropdown-panel" id="ddDeptPanel">
+              <div class="dropdown-actions">
+                <button type="button" class="dd-action" data-action="all">✓ เลือกทั้งหมด</button>
+                <button type="button" class="dd-action" data-action="clear">✕ ล้างข้อมูล</button>
+              </div>
+              <div class="dropdown-options" id="ddDeptOptions"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-block" style="grid-column:span 2">
+          <label>จัดกลุ่ม (เลือกได้หลายค่า)</label>
+          <div class="dropdown-multi" data-dim="group">
+            <button type="button" class="dropdown-toggle" id="ddGroupToggle">จัดกลุ่ม: ทั้งหมด</button>
+            <div class="dropdown-panel" id="ddGroupPanel">
+              <div class="dropdown-actions">
+                <button type="button" class="dd-action" data-action="all">✓ เลือกทั้งหมด</button>
+                <button type="button" class="dd-action" data-action="clear">✕ ล้างข้อมูล</button>
+              </div>
+              <div class="dropdown-options" id="ddGroupOptions"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-block" style="grid-column:span 2">
+          <label>จำแนกประเภท (เลือกได้หลายค่า)</label>
+          <div class="dropdown-multi" data-dim="classify">
+            <button type="button" class="dropdown-toggle" id="ddClassifyToggle">จำแนกประเภท: ทั้งหมด</button>
+            <div class="dropdown-panel" id="ddClassifyPanel">
+              <div class="dropdown-actions">
+                <button type="button" class="dd-action" data-action="all">✓ เลือกทั้งหมด</button>
+                <button type="button" class="dd-action" data-action="clear">✕ ล้างข้อมูล</button>
+              </div>
+              <div class="dropdown-options" id="ddClassifyOptions"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-block" style="grid-column:span 2">
+          <label>สรุปผลการรับบริการ (เลือกได้หลายค่า)</label>
+          <div class="dropdown-multi" data-dim="summary">
+            <button type="button" class="dropdown-toggle" id="ddSummaryToggle">สรุปผลการรับบริการ: ทั้งหมด</button>
+            <div class="dropdown-panel" id="ddSummaryPanel">
+              <div class="dropdown-actions">
+                <button type="button" class="dd-action" data-action="all">✓ เลือกทั้งหมด</button>
+                <button type="button" class="dd-action" data-action="clear">✕ ล้างข้อมูล</button>
+              </div>
+              <div class="dropdown-options" id="ddSummaryOptions"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>KPI Summary</h2>
+      <div class="kpi-grid" id="kpiGrid"></div>
+    </div>
+
+    <div class="card">
+      <h2>แนวโน้มจำนวนผู้รับบริการรายวัน</h2>
+      <div class="chart-box full"><canvas id="chTrend"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>สัดส่วนเพศ / สัดส่วนประเภทการรับบริการ</h2>
+      <div class="charts-grid">
+        <div><div class="chart-box"><canvas id="chGender"></canvas></div><div class="hint">คลิกที่กราฟเพื่อกรองตามเพศ</div></div>
+        <div><div class="chart-box"><canvas id="chGroup"></canvas></div><div class="hint">คลิกที่กราฟเพื่อกรองตามจัดกลุ่ม</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>แผนก / โรคตามระบบ / การวินิจฉัย</h2>
+      <div class="charts-grid">
+        <div><div class="chart-box tall"><canvas id="chDept"></canvas></div><div class="hint">คลิกแท่งกราฟเพื่อกรองตามแผนก</div></div>
+        <div><div class="chart-box tall"><canvas id="chClassify"></canvas></div><div class="hint">คลิกเพื่อกรองตามจำแนกประเภท (โรคตามระบบ)</div></div>
+        <div><div class="chart-box tall"><canvas id="chDiag"></canvas></div><div class="hint">10 อันดับการวินิจฉัย - คลิกเพื่อกรอง</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>สรุปผลการรับบริการ / อุบัติเหตุ</h2>
+      <div class="charts-grid">
+        <div><div class="chart-box"><canvas id="chSummary"></canvas></div><div class="hint">คลิกเพื่อกรองตามสรุปผลการรับบริการ</div></div>
+        <div><div class="chart-box"><canvas id="chCause"></canvas></div><div class="hint">สาเหตุการบาดเจ็บ - คลิกเพื่อกรอง</div></div>
+        <div><div class="chart-box"><canvas id="chSeverity"></canvas></div><div class="hint">ความรุนแรง - คลิกเพื่อกรอง</div></div>
+        <div><div class="chart-box"><canvas id="chInjType"></canvas></div><div class="hint">ลักษณะการบาดเจ็บ/เจ็บป่วย - คลิกเพื่อกรอง</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>BLUE Plaster / ช่วงเวลาที่มารับบริการ</h2>
+      <div class="charts-grid">
+        <div><div class="chart-box"><canvas id="chPlaster"></canvas></div><div class="hint">จำนวนชิ้นที่เบิกรวมรายเดือน (แสดงทุกเดือนที่มีข้อมูลเสมอ) - คลิกเพื่อกรองตามเดือน</div></div>
+        <div><div class="chart-box"><canvas id="chTimeBucket"></canvas></div><div class="hint">คลิกเพื่อกรองตามช่วงเวลา</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>การใช้ยา  <span class="badge" id="medMonthsBadge"></span></h2>
+      <div class="charts-grid">
+        <div><div class="chart-box tall"><canvas id="chMedMonthly"></canvas></div><div class="hint">จำนวนรวมรายเดือน: ปริมาณการใช้ (แท่ง) คู่กับ มูลค่าการใช้ (เส้น)</div></div>
+        <div><div class="chart-box tall"><canvas id="chMedTop10Qty"></canvas></div><div class="hint">Top 10 ปริมาณการใช้</div></div>
+      </div>
+      <div class="charts-grid" style="margin-top:18px;">
+        <div><div class="chart-box tall"><canvas id="chMedTop10Value"></canvas></div><div class="hint">Top 10 มูลค่าการใช้ (บาท)</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>ผู้มารับบริการมากกว่า 1 ครั้ง</h2>
+      <div class="chart-box tall"><canvas id="chRepeat"></canvas></div>
+      <div class="hint">คลิกแท่งกราฟเพื่อดูรายละเอียดแผนก/การวินิจฉัยของบุคคลนั้น</div>
+      <div class="repeat-detail" id="repeatDetail"></div>
+    </div>
+
+    <div class="card">
+      <h2>ค้นหาและตารางข้อมูลรายละเอียด</h2>
+      <input type="text" id="globalSearch" placeholder="🔍 ค้นหาข้อมูลจากทุกคอลัมน์...">
+      <div class="count-note" id="rowCountNote"></div>
+      <div class="table-wrap"><table id="dataTable"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+</main>
+<footer>Health Service Dashboard (version: 690921.1)<br>Created by Apisamai Sawatdisarn, RN.</footer>
+
+<script>
+Chart.register(ChartDataLabels);
+
+const CANON = ["วันที่รับบริการ","yymm","ลำดับที่","ชื่อ-สกุล","เพศ","อายุ(ปี)","เบอร์โทร","รหัสพนักงาน","แผนก","จุดงาน",
+"เวลาที่มารับบริการ","อาการ / ประวัติปัจจุบัน","ประวัติอดีต","การรักษา","Vital Sign","Diag","Refer","Bed rest","อุบัติเหตุ",
+"จัดกลุ่ม","จำแนกประเภท","สรุปผลการรับบริการ","พยาบาลเวร","หมายเหตุ","BLUE plaster\n: Lot. No.","BLUE plaster\n: Qty.",
+"อายุงาน(ปี)","อายุงาน(เดือน)","อายุงาน(วัน)","วันที่เกิดเหตุ","เวลาที่เกิดเหตุ","สถานทีเกิดเหตุ","สาเหตุการบาดเจ็บ",
+"ส่วนที่ได้รับบาดเจ็บ","ความรุนแรง","ระบุอื่น ๆ สาเหตุ : เจ็บป่วยในงาน","ลักษณะการบาดเจ็บ/เจ็บป่วย"];
+
+/* ===== การตั้งค่า Dropdown Multi-select 4 ตัว (ใหม่) ===== */
+const DROPDOWN_CONFIGS = [
+  {dim:'dept', canon:'แผนก', toggleId:'ddDeptToggle', optionsId:'ddDeptOptions', label:'แผนก'},
+  {dim:'group', canon:'จัดกลุ่ม', toggleId:'ddGroupToggle', optionsId:'ddGroupOptions', label:'จัดกลุ่ม'},
+  {dim:'classify', canon:'จำแนกประเภท', toggleId:'ddClassifyToggle', optionsId:'ddClassifyOptions', label:'จำแนกประเภท'},
+  {dim:'summary', canon:'สรุปผลการรับบริการ', toggleId:'ddSummaryToggle', optionsId:'ddSummaryOptions', label:'สรุปผลการรับบริการ'},
+];
+
+let MAIN = [];
+let FIELD_MAP = {};
+let MED_SHEETS = [];
+let charts = {};
+let minDate=null, maxDate=null;
+let dataLoaded = false;
+
+const state = {
+  dateStart:null, dateEnd:null,
+  bedrest:'all', refer:'all', accident:'all', plaster:'all',
+  noteSearch:'', globalSearch:'',
+  sel:{ dept:new Set(), group:new Set(), classify:new Set(), summary:new Set(),
+        gender:new Set(), diag:new Set(), injCause:new Set(), severity:new Set(), injType:new Set(), timeBucket:new Set(), plasterMonth:new Set() },
+};
+
+/* ============ HELPERS ============ */
+function normKey(s){ return (s||'').toString().replace(/\s+/g,'').toLowerCase(); }
+function buildFieldMap(sampleRow){
+  const map={}; const actualKeys=Object.keys(sampleRow||{});
+  CANON.forEach(c=>{
+    let found = actualKeys.find(k=>k===c);
+    if(!found) found = actualKeys.find(k=>normKey(k)===normKey(c));
+    map[c]= found || c;
+  });
+  return map;
+}
+function F(rec,c){ return rec[FIELD_MAP[c]]; }
+const MONTHS_EN_ABBR = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+const THAI_MONTHS_SHORT=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+const THAI_MONTHS=["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+
+function parseThaiDate(s){
+  if(s===null || s===undefined || s==='') return null;
+  if(s instanceof Date) return new Date(s.getFullYear(), s.getMonth(), s.getDate());
+  if(typeof s === 'number'){
+    const d = new Date(Date.UTC(1899,11,30) + Math.round(s)*86400000);
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+  s = s.toString().trim();
+  let m = s.match(/^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{2,4})$/);
+  if(m){ let y=+m[3]; if(y<100) y+=2000; const mon=MONTHS_EN_ABBR[m[2].slice(0,3)]; if(mon===undefined) return null; return new Date(y,mon,+m[1]); }
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m){ return new Date(+m[1],+m[2]-1,+m[3]); }
+  return null;
+}
+function fmtDateInput(d){ if(!d) return ''; const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function parseDateInput(v){ if(!v) return null; const [y,m,d]=v.split('-').map(Number); return new Date(y,m-1,d); }
+function formatDateDisplay(d){ if(!d) return ''; return `${d.getDate()} ${THAI_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`; }
+function monthKeyOf(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+function monthLabelOf(key){ const [y,m]=key.split('-'); return `${THAI_MONTHS_SHORT[parseInt(m)-1]} ${parseInt(y)+543}`; }
+
+function timeToMinutesRaw(raw){
+  if(raw===null||raw===undefined||raw==='') return null;
+  if(typeof raw === 'number'){
+    let frac = raw - Math.floor(raw); if(frac<0) frac+=1;
+    let totalMin = Math.round(frac*1440); if(totalMin>=1440) totalMin-=1440;
+    return totalMin;
+  }
+  const str = raw.toString().trim();
+  const first = str.split(/[-,]/)[0].trim();
+  const m = first.match(/(\d{1,2})[.:](\d{2})/);
+  if(!m) return null;
+  return (+m[1])*60 + (+m[2]);
+}
+function timeBucketOf(raw){
+  const mins = timeToMinutesRaw(raw);
+  if(mins===null) return 'ไม่ระบุ';
+  if(mins < 12*60) return '08.00-12.00 น.';
+  if(mins < 13*60) return '12.00-13.00 น.';
+  if(mins < 17*60) return '13.00-17.00 น.';
+  return 'หลัง 17.00 น.';
+}
+function displayVal(r, canon){
+  const raw = F(r, canon);
+  if(raw===null||raw===undefined||raw==='') return '';
+  if(canon==='วันที่รับบริการ'||canon==='วันที่เกิดเหตุ'){
+    const d = parseThaiDate(raw);
+    return d ? formatDateDisplay(d) : raw;
+  }
+  return raw;
+}
+function safeNum(v){
+  if(v===null||v===undefined||v==='') return 0;
+  if(typeof v==='number') return isNaN(v)?0:v;
+  const cleaned = v.toString().replace(/,/g,'').trim();
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+function markYN(v){ return (v && v.toString().trim()!=='') ? 'มี' : 'ไม่มี'; }
+function esc(s){ return (s===null||s===undefined)?'':String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+const PALETTE=['#16a34a','#0284c7','#22c55e','#38bdf8','#059669','#0369a1','#4ade80','#7dd3fc','#065f46','#0ea5e9','#86efac','#bae6fd','#15803d','#075985'];
+
+function showDiag(msg){ const el=document.getElementById('diagBanner'); el.style.display='block'; el.textContent=msg; }
+function showErr(msg){ const el=document.getElementById('errBanner'); el.style.display='block'; el.textContent=msg; }
+function clearBanners(){ document.getElementById('diagBanner').style.display='none'; document.getElementById('errBanner').style.display='none'; document.getElementById('errBanner').textContent=''; }
+function logErr(where, e){ console.error('['+where+']', e); }
+
+const DL_BAR_VERTICAL = { anchor:'end', align:'top', offset:2, color:'#15803d', font:{ weight:'bold', size:10 }, formatter:(v)=> (v>0 ? v.toLocaleString() : '') };
+const DL_BAR_HORIZONTAL = { anchor:'end', align:'right', offset:2, color:'#15803d', font:{ weight:'bold', size:10 }, formatter:(v)=> (v>0 ? v.toLocaleString() : '') };
+const DL_PIE = { color:'#fff', font:{ weight:'bold', size:11 }, formatter:(value, ctx)=>{ const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); const pct = total? (value/total*100).toFixed(1) : 0; return value>0 ? `${value}\n(${pct}%)` : ''; } };
+const DL_LINE = { anchor:'end', align:'top', offset:4, color:'#0369a1', font:{ weight:'bold', size:9 }, formatter:(v)=> (v>0 ? v.toLocaleString() : '') };
+
+/* ============ LOAD / DECORATE MAIN DATASET ============ */
+function loadMain(rawArr){
+  MAIN = rawArr.filter(r=>r && Object.keys(r).length>0);
+  FIELD_MAP = buildFieldMap(MAIN[0]||{});
+  MAIN.forEach(r=>{
+    r.__date = parseThaiDate(F(r,"วันที่รับบริการ"));
+    const empId = (F(r,"รหัสพนักงาน")||'').toString().trim();
+    r.__personKey = (empId && empId!=='-') ? empId : (F(r,"ชื่อ-สกุล")||'').toString().trim();
+    r.__timeBucket = timeBucketOf(F(r,"เวลาที่มารับบริการ"));
+    r.__referYN = markYN(F(r,"Refer"));
+    r.__bedrestYN = markYN(F(r,"Bed rest"));
+    r.__accidentYN = markYN(F(r,"อุบัติเหตุ"));
+    r.__plasterYN = markYN(F(r,"BLUE plaster\n: Lot. No."));
+    r.__plasterQty = safeNum(F(r,"BLUE plaster\n: Qty."));
+    r.__searchBlob = CANON.map(c=>{ const v=displayVal(r,c); return (v===null||v===undefined)?'':v.toString(); }).join(' | ').toLowerCase();
+  });
+  const validDates = MAIN.map(r=>r.__date).filter(Boolean).sort((a,b)=>a-b);
+  const datedCount = validDates.length;
+  minDate = validDates[0] || new Date();
+  maxDate = validDates[validDates.length-1] || new Date();
+  state.dateStart = new Date(minDate.getTime()); state.dateEnd = new Date(maxDate.getTime());
+  document.getElementById('dateStart').value = fmtDateInput(minDate);
+  document.getElementById('dateEnd').value = fmtDateInput(maxDate);
+  resetSelSets();
+  renderDropdownOptions();
+  showDiag(`โหลดข้อมูลสำเร็จ ${MAIN.length.toLocaleString()} รายการ (แปลงวันที่ได้ ${datedCount.toLocaleString()} รายการ) — ช่วงวันที่: ${formatDateDisplay(minDate)} ถึง ${formatDateDisplay(maxDate)}`);
+  renderAll();
+}
+function resetSelSets(){
+  Object.values(state.sel).forEach(s=>s.clear());
+  state.bedrest='all';state.refer='all';state.accident='all';state.plaster='all';state.noteSearch='';state.globalSearch='';
+  document.getElementById('noteSearch').value=''; document.getElementById('globalSearch').value='';
+  document.querySelectorAll('.radio-row button').forEach(b=>b.classList.toggle('active', b.dataset.val==='all'));
+}
+function distinctVals(canon){
+  const s=new Set(); MAIN.forEach(r=>{ const v=F(r,canon); if(v!==null&&v!==undefined&&v.toString().trim()!=='') s.add(v.toString().trim()); });
+  return Array.from(s).sort();
+}
+
+/* ===== Dropdown Multi-select: render + events (ใหม่) ===== */
+function renderDropdownOptions(){
+  DROPDOWN_CONFIGS.forEach(cfg=>{
+    const options = distinctVals(cfg.canon);
+    const optionsEl = document.getElementById(cfg.optionsId);
+    const toggleEl = document.getElementById(cfg.toggleId);
+    const selSet = state.sel[cfg.dim];
+    if(options.length===0){
+      optionsEl.innerHTML = `<div class="dropdown-empty">ไม่มีข้อมูล</div>`;
+    } else {
+      optionsEl.innerHTML = options.map(o=>{
+        const checked = selSet.has(o) ? 'checked' : '';
+        return `<label class="dropdown-option"><input type="checkbox" data-dim="${cfg.dim}" value="${esc(o)}" ${checked}><span title="${esc(o)}">${esc(o)}</span></label>`;
+      }).join('');
+    }
+    const count = selSet.size;
+    let label;
+    if(count===0 || count>=options.length){ label = `${cfg.label}: ทั้งหมด`; }
+    else { label = `${cfg.label}: เลือก ${count} รายการ`; }
+    toggleEl.textContent = label;
+    toggleEl.classList.toggle('has-selection', count>0 && count<options.length);
+  });
+}
+
+/* ===== Event: เปิด/ปิด dropdown, ปุ่มเลือกทั้งหมด/ล้าง, ติ๊ก checkbox, ปุ่ม radio เดิม ===== */
+document.body.addEventListener('click', e=>{
+  const toggleBtn = e.target.closest('.dropdown-toggle');
+  if(toggleBtn){
+    const panel = toggleBtn.nextElementSibling;
+    const isOpen = panel.classList.contains('open');
+    document.querySelectorAll('.dropdown-panel.open').forEach(p=>p.classList.remove('open'));
+    if(!isOpen) panel.classList.add('open');
+    e.stopPropagation();
+    return;
+  }
+  const actionBtn = e.target.closest('.dd-action');
+  if(actionBtn){
+    const panel = actionBtn.closest('.dropdown-panel');
+    const dim = panel.closest('.dropdown-multi').dataset.dim;
+    const cfg = DROPDOWN_CONFIGS.find(c=>c.dim===dim);
+    if(actionBtn.dataset.action==='all'){
+      state.sel[dim] = new Set(distinctVals(cfg.canon));
+    } else {
+      state.sel[dim].clear();
+    }
+    renderAll();
+    e.stopPropagation();
+    return;
+  }
+  if(!e.target.closest('.dropdown-multi')){
+    document.querySelectorAll('.dropdown-panel.open').forEach(p=>p.classList.remove('open'));
+  }
+  const rbtn = e.target.closest('.radio-row button');
+  if(rbtn){ const dim=rbtn.parentElement.dataset.dim; state[dim]=rbtn.dataset.val;
+    rbtn.parentElement.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b===rbtn)); renderAll(); return; }
+});
+document.body.addEventListener('change', e=>{
+  if(e.target.matches('.dropdown-options input[type=checkbox]')){
+    const dim = e.target.dataset.dim; const val = e.target.value;
+    if(e.target.checked) state.sel[dim].add(val); else state.sel[dim].delete(val);
+    renderAll();
+  }
+});
+function toggleSel(dim,val){ const s=state.sel[dim]; if(!s) return; if(s.has(val)) s.delete(val); else s.add(val); }
+
+document.getElementById('dateStart').addEventListener('change', e=>{ state.dateStart = parseDateInput(e.target.value); renderAll(); });
+document.getElementById('dateEnd').addEventListener('change', e=>{ state.dateEnd = parseDateInput(e.target.value); renderAll(); });
+document.getElementById('noteSearch').addEventListener('input', e=>{ state.noteSearch = e.target.value; renderAll(); });
+document.getElementById('globalSearch').addEventListener('input', e=>{ state.globalSearch = e.target.value; renderAll(); });
+document.getElementById('btnClear').addEventListener('click', ()=>{
+  if(!dataLoaded) return;
+  state.dateStart=new Date(minDate.getTime()); state.dateEnd=new Date(maxDate.getTime());
+  document.getElementById('dateStart').value=fmtDateInput(minDate);
+  document.getElementById('dateEnd').value=fmtDateInput(maxDate);
+  resetSelSets(); renderDropdownOptions(); renderAll();
+});
+
+/* ============ UPLOAD NEW EXCEL ============ */
+function triggerFileInput(){ document.getElementById('fileInput').click(); }
+document.getElementById('btnUpload').addEventListener('click', triggerFileInput);
+document.getElementById('btnUploadBig').addEventListener('click', triggerFileInput);
+
+document.getElementById('fileInput').addEventListener('change', function(e){
+  const file = e.target.files[0]; if(!file) return;
+  document.getElementById('loadingOverlay').style.display='flex';
+  clearBanners();
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+
+      let mainSheetName = wb.SheetNames.find(n=>n.includes('บันทึกบริการ'));
+      if(!mainSheetName) mainSheetName = wb.SheetNames.find(n=>!n.includes('ยา')&&!n.includes('เวชภัณฑ์')) || wb.SheetNames[0];
+      const mainJson = XLSX.utils.sheet_to_json(wb.Sheets[mainSheetName], {defval:null});
+      if(!mainJson.length) throw new Error('ไม่พบข้อมูลใน Sheet "'+mainSheetName+'"');
+
+      const medSheetNames = wb.SheetNames.filter(n=>n!==mainSheetName && (n.includes('ยา')||n.includes('เวชภัณฑ์')));
+      let newMedSheets = [];
+      medSheetNames.forEach(sn=>{
+        try{
+          const parsed = parseMedSheetGeneric(wb.Sheets[sn], sn);
+          if(parsed && parsed.drugs.length) newMedSheets.push(parsed);
+        }catch(medErr){ logErr('parseMedSheet:'+sn, medErr); }
+      });
+      MED_SHEETS = newMedSheets;
+
+      loadMain(mainJson);
+      document.getElementById('fileName').textContent = '📄 ' + file.name;
+      document.getElementById('emptyState').style.display='none';
+      document.getElementById('dashboardContent').style.display='block';
+      dataLoaded = true;
+    }catch(err){
+      logErr('uploadHandler', err);
+      alert('ไม่สามารถอ่านไฟล์ได้ กรุณาตรวจสอบว่าเป็นไฟล์ Excel ที่มี Sheet "บันทึกบริการรายวัน"\n\nรายละเอียดข้อผิดพลาด: ' + err.message);
+    } finally {
+      document.getElementById('loadingOverlay').style.display='none';
+    }
+  };
+  reader.onerror = function(){
+    document.getElementById('loadingOverlay').style.display='none';
+    alert('เกิดข้อผิดพลาดในการอ่านไฟล์');
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value='';
+});
+
+function parseMedSheetGeneric(ws, sheetName){
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+  let headerRowIdx=-1;
+  for(let i=0;i<Math.min(rows.length,8);i++){
+    const row = rows[i]||[];
+    if(row.some(c=>typeof c==='string' && c.trim()==='ยา / เวชภัณฑ์')){ headerRowIdx=i; break; }
+  }
+  if(headerRowIdx<0) return null;
+  const header = rows[headerRowIdx];
+  const findIdx = (matchFn)=> header.findIndex(c=>typeof c==='string' && matchFn(c.trim()));
+  const idxName = findIdx(c=>c==='ยา / เวชภัณฑ์');
+  const idxUnit = findIdx(c=>c==='หน่วยนับ');
+  const idxQty = findIdx(c=>c==='รวมใช้ไป');
+  const idxValue = findIdx(c=>c.includes('ใช้ไปรวม'));
+  const idxCategory = idxName>0 ? idxName-1 : -1;
+  if(idxName<0 || idxQty<0) return null;
+
+  const drugs=[];
+  for(let i=headerRowIdx+1;i<rows.length;i++){
+    const row=rows[i]; if(!row) continue;
+    const name = row[idxName];
+    if(!name || typeof name!=='string' || name.trim()===''||name.trim()==='กลุ่มยา') continue;
+    const qty = safeNum(row[idxQty]);
+    const value = idxValue>=0 ? safeNum(row[idxValue]) : 0;
+    const unit = idxUnit>=0 ? (row[idxUnit]||'') : '';
+    const category = idxCategory>=0 ? (row[idxCategory]||'') : '';
+    drugs.push({name:name.trim(), unit, qty, value, category});
+  }
+
+  let year=null, month=null;
+  outer:
+  for(let i=0;i<Math.min(rows.length,5);i++){
+    for(const cell of (rows[i]||[])){
+      if(typeof cell==='string'){
+        for(let mIdx=0;mIdx<THAI_MONTHS.length;mIdx++){
+          if(cell.includes(THAI_MONTHS[mIdx])){
+            const ym = cell.match(/(\d{4})/);
+            let y = ym? parseInt(ym[1]) : null;
+            if(y && y>2400) y-=543;
+            year = y; month = mIdx;
+            break outer;
+          }
+        }
+      }
+    }
+  }
+  const label = (month!==null && year!==null) ? `${THAI_MONTHS[month]} ${year+543}` : sheetName;
+  return { year, month, label, drugs };
+}
+
+/* ============ FILTERING ============ */
+function matchesFilters(r){
+  if(state.dateStart && r.__date && r.__date < state.dateStart) return false;
+  if(state.dateEnd && r.__date && r.__date > state.dateEnd) return false;
+  if(state.bedrest!=='all' && r.__bedrestYN!==state.bedrest) return false;
+  if(state.refer!=='all' && r.__referYN!==state.refer) return false;
+  if(state.accident!=='all' && r.__accidentYN!==state.accident) return false;
+  if(state.plaster!=='all' && r.__plasterYN!==state.plaster) return false;
+  if(state.sel.dept.size && !state.sel.dept.has((F(r,"แผนก")||'').toString().trim())) return false;
+  if(state.sel.group.size && !state.sel.group.has((F(r,"จัดกลุ่ม")||'').toString().trim())) return false;
+  if(state.sel.classify.size && !state.sel.classify.has((F(r,"จำแนกประเภท")||'').toString().trim())) return false;
+  if(state.sel.summary.size && !state.sel.summary.has((F(r,"สรุปผลการรับบริการ")||'').toString().trim())) return false;
+  if(state.sel.gender.size && !state.sel.gender.has((F(r,"เพศ")||'').toString().trim())) return false;
+  if(state.sel.diag.size && !state.sel.diag.has((F(r,"Diag")||'').toString().trim())) return false;
+  if(state.sel.injCause.size && !state.sel.injCause.has((F(r,"สาเหตุการบาดเจ็บ")||'').toString().trim())) return false;
+  if(state.sel.severity.size && !state.sel.severity.has((F(r,"ความรุนแรง")||'').toString().trim())) return false;
+  if(state.sel.injType.size && !state.sel.injType.has((F(r,"ลักษณะการบาดเจ็บ/เจ็บป่วย")||'').toString().trim())) return false;
+  if(state.sel.timeBucket.size && !state.sel.timeBucket.has(r.__timeBucket)) return false;
+  if(state.sel.plasterMonth.size){
+    const key = r.__date? monthKeyOf(r.__date) : '';
+    if(!state.sel.plasterMonth.has(key)) return false;
+  }
+  if(state.noteSearch){
+    const note=(F(r,"หมายเหตุ")||'').toString().toLowerCase();
+    if(!note.includes(state.noteSearch.toLowerCase())) return false;
+  }
+  if(state.globalSearch){
+    if(!r.__searchBlob.includes(state.globalSearch.toLowerCase())) return false;
+  }
+  return true;
+}
+function getFiltered(){ return MAIN.filter(matchesFilters); }
+
+/* ============ RENDER ALL ============ */
+function renderAll(){
+  if(!dataLoaded) return;
+  const filtered = getFiltered();
+  try{ renderDropdownOptions(); }catch(e){ logErr('renderDropdownOptions',e); }
+  try{ renderKPI(filtered); }catch(e){ logErr('renderKPI',e); showErr('เกิดข้อผิดพลาดใน KPI Summary: '+e.message); }
+  try{ renderCharts(filtered); }catch(e){ logErr('renderCharts',e); showErr('เกิดข้อผิดพลาดในการวาดกราฟบางส่วน: '+e.message); }
+  try{ renderTable(filtered); }catch(e){ logErr('renderTable',e); }
+}
+
+/* ============ KPI ============ */
+function renderKPI(filtered){
+  const visits = filtered.length;
+  const personMap = new Map();
+  filtered.forEach(r=>{ if(!personMap.has(r.__personKey)) personMap.set(r.__personKey, {gender:(F(r,"เพศ")||'').trim(), count:0}); personMap.get(r.__personKey).count++; });
+  let male=0,female=0; personMap.forEach(p=>{ if(p.gender.includes('ชาย')&&!p.gender.includes('หญิง')) male++; else if(p.gender.includes('หญิง')) female++; });
+  const accidentCnt = filtered.filter(r=>(F(r,"จัดกลุ่ม")||'').includes('(1)')).length;
+  const referCnt = filtered.filter(r=>r.__referYN==='มี').length;
+  const bedrestCnt = filtered.filter(r=>r.__bedrestYN==='มี').length;
+  const homeCnt = filtered.filter(r=>(F(r,"สรุปผลการรับบริการ")||'').trim()==='กลับบ้าน').length;
+  const normalCnt = filtered.filter(r=>(F(r,"สรุปผลการรับบริการ")||'').trim()==='กลับไปปฏิบัติงานได้ตามปกติ').length;
+  const repeatCnt = Array.from(personMap.values()).filter(p=>p.count>1).length;
+
+  const kpis = [
+    {label:'จำนวนครั้งรับบริการ', value:visits, sub:'ครั้ง'},
+    {label:'จำนวนคนรับบริการ (ไม่ซ้ำ)', value:personMap.size, sub:`ชาย ${male} / หญิง ${female}`},
+    {label:'อุบัติเหตุในงาน', value:accidentCnt, sub:'ครั้ง'},
+    {label:'ส่งต่อโรงพยาบาล', value:referCnt, sub:'ครั้ง'},
+    {label:'นอนพักชั่วคราว', value:bedrestCnt, sub:'ครั้ง'},
+    {label:'กลับบ้าน', value:homeCnt, sub:'ครั้ง'},
+    {label:'กลับไปปฏิบัติงานได้ตามปกติ', value:normalCnt, sub:'ครั้ง'},
+    {label:'มารับบริการมากกว่า 1 ครั้ง', value:repeatCnt, sub:'คน'},
+  ];
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k=>`<div class="kpi"><div class="label">${k.label}</div><div class="value">${k.value.toLocaleString()}</div><div class="sub">${k.sub}</div></div>`).join('');
+}
+
+/* ============ CHART HELPERS ============ */
+function destroy(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+
+function safeChart(id, fn){
+  const canvas = document.getElementById(id);
+  if(canvas){
+    canvas.style.display='';
+    const oldErr = canvas.parentElement && canvas.parentElement.querySelector('.chart-error');
+    if(oldErr) oldErr.remove();
+  }
+  destroy(id);
+  try{
+    fn();
+  }catch(e){
+    logErr('chart:'+id, e);
+    destroy(id);
+    if(canvas && canvas.parentElement){
+      canvas.style.display='none';
+      const errDiv=document.createElement('div');
+      errDiv.className='chart-error';
+      errDiv.textContent = 'ไม่สามารถแสดงกราฟนี้ได้: '+e.message;
+      canvas.parentElement.appendChild(errDiv);
+    }
+  }
+}
+function countBy(arr, canon){
+  const m=new Map();
+  arr.forEach(r=>{ let v=F(r,canon); v = (v===null||v===undefined||v.toString().trim()==='') ? null : v.toString().trim(); if(v===null) return; m.set(v,(m.get(v)||0)+1); });
+  return m;
+}
+function mapToSorted(m, topN){
+  let arr = Array.from(m.entries()).sort((a,b)=>b[1]-a[1]);
+  if(topN) arr = arr.slice(0,topN);
+  return arr;
+}
+function makePie(id, arr, dim, opts={}){
+  const ctx = document.getElementById(id).getContext('2d');
+  const labels = arr.map(a=>a[0]); const data = arr.map(a=>a[1]);
+  charts[id] = new Chart(ctx,{
+    type: opts.doughnut? 'doughnut':'pie',
+    data:{ labels, datasets:[{ data, backgroundColor: labels.map((_,i)=>PALETTE[i%PALETTE.length]) }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'right', labels:{boxWidth:12,font:{size:10}}},
+        tooltip:{ callbacks:{ label:(ctx)=>{ const total=data.reduce((a,b)=>a+b,0); const pct=total? (ctx.parsed/total*100).toFixed(1):0; return `${ctx.label}: ${ctx.parsed} (${pct}%)`; } } },
+        datalabels: DL_PIE
+      },
+      onClick:(evt,els)=>{ if(els.length){ const idx=els[0].index; toggleSel(dim, labels[idx]); renderAll(); } }
+    }
+  });
+}
+function makeBar(id, arr, dim, horizontal=false){
+  const ctx=document.getElementById(id).getContext('2d');
+  const labels=arr.map(a=>a[0]); const data=arr.map(a=>a[1]);
+  charts[id]=new Chart(ctx,{
+    type:'bar',
+    data:{ labels, datasets:[{ label:'จำนวน', data, backgroundColor: labels.map((_,i)=>PALETTE[i%PALETTE.length]) }]},
+    options:{ indexAxis: horizontal?'y':'x', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, datalabels: horizontal ? DL_BAR_HORIZONTAL : DL_BAR_VERTICAL },
+      scales:{ x:{ticks:{font:{size:10}}}, y:{ticks:{font:{size:10}}} },
+      onClick:(evt,els)=>{ if(els.length){ const idx=els[0].index; toggleSel(dim, labels[idx]); renderAll(); } }
+    }
+  });
+}
+function makeLine(id, labels, data){
+  const ctx=document.getElementById(id).getContext('2d');
+  charts[id]=new Chart(ctx,{
+    type:'line',
+    data:{ labels, datasets:[{ label:'จำนวนผู้รับบริการ', data, borderColor:'#0284c7', backgroundColor:'rgba(22,163,74,0.15)', tension:.3, fill:true, pointRadius:3 }]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, datalabels: DL_LINE } }
+  });
+}
+
+/* ============ MAIN CHART RENDER ============ */
+function renderCharts(filtered){
+  safeChart('chTrend', ()=>{
+    const dayMap=new Map();
+    filtered.forEach(r=>{ if(!r.__date) return; const key=fmtDateInput(r.__date); dayMap.set(key,(dayMap.get(key)||0)+1); });
+    const days = Array.from(dayMap.keys()).sort();
+    makeLine('chTrend', days, days.map(d=>dayMap.get(d)));
+  });
+  safeChart('chGender', ()=> makePie('chGender', mapToSorted(countBy(filtered,"เพศ")), 'gender'));
+  safeChart('chGroup', ()=> makePie('chGroup', mapToSorted(countBy(filtered,"จัดกลุ่ม")), 'group'));
+  safeChart('chDept', ()=> makeBar('chDept', mapToSorted(countBy(filtered,"แผนก")), 'dept'));
+  safeChart('chClassify', ()=> makeBar('chClassify', mapToSorted(countBy(filtered,"จำแนกประเภท")), 'classify', true));
+  safeChart('chDiag', ()=> makeBar('chDiag', mapToSorted(countBy(filtered,"Diag"),10), 'diag', true));
+  safeChart('chSummary', ()=> makePie('chSummary', mapToSorted(countBy(filtered,"สรุปผลการรับบริการ")), 'summary', {doughnut:true}));
+  safeChart('chCause', ()=> makeBar('chCause', mapToSorted(countBy(filtered,"สาเหตุการบาดเจ็บ")), 'injCause', true));
+  safeChart('chSeverity', ()=> makePie('chSeverity', mapToSorted(countBy(filtered,"ความรุนแรง")), 'severity'));
+  safeChart('chInjType', ()=> makeBar('chInjType', mapToSorted(countBy(filtered,"ลักษณะการบาดเจ็บ/เจ็บป่วย")), 'injType', true));
+  safeChart('chTimeBucket', ()=>{
+    const tbMap = new Map();
+    filtered.forEach(r=>{ tbMap.set(r.__timeBucket,(tbMap.get(r.__timeBucket)||0)+1); });
+    makePie('chTimeBucket', mapToSorted(tbMap), 'timeBucket', {doughnut:true});
+  });
+
+  safeChart('chPlaster', ()=>{
+    const plasterMap = new Map();
+    MAIN.forEach(r=>{ if(r.__date) plasterMap.set(monthKeyOf(r.__date), 0); });
+    filtered.forEach(r=>{
+      if(!r.__date) return;
+      const key = monthKeyOf(r.__date);
+      plasterMap.set(key, (plasterMap.get(key)||0) + r.__plasterQty);
+    });
+    const sortedKeys = Array.from(plasterMap.keys()).sort();
+    const labels = sortedKeys.map(monthLabelOf);
+    const data = sortedKeys.map(k=>plasterMap.get(k));
+    const ctx=document.getElementById('chPlaster').getContext('2d');
+    charts['chPlaster']=new Chart(ctx,{
+      type:'bar',
+      data:{ labels, datasets:[{ label:'จำนวนชิ้น (Qty.)', data, backgroundColor:'#16a34a' }] },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, datalabels: DL_BAR_VERTICAL },
+        scales:{ y:{ beginAtZero:true } },
+        onClick:(evt,els)=>{ if(els.length){ const idx=els[0].index; toggleSel('plasterMonth', sortedKeys[idx]); renderAll(); } }
+      }
+    });
+  });
+
+  safeChart('chMedMonthly', renderMedMonthlyChart);
+  safeChart('chMedTop10Qty', renderMedTop10Qty);
+  safeChart('chMedTop10Value', renderMedTop10Value);
+  safeChart('chRepeat', ()=> renderRepeatChart(filtered));
+}
+
+/* ============ MEDICINE CHARTS ============ */
+function getMatchedMedSheets(){
+  const s = state.dateStart||minDate, e = state.dateEnd||maxDate;
+  const sYM = s.getFullYear()*12+s.getMonth();
+  const eYM = e.getFullYear()*12+e.getMonth();
+  return MED_SHEETS.filter(m=> m.year!==null && m.month!==null && (m.year*12+m.month)>=sYM && (m.year*12+m.month)<=eYM)
+                   .sort((a,b)=> (a.year*12+a.month)-(b.year*12+b.month));
+}
+function renderMedMonthlyChart(){
+  const matched = getMatchedMedSheets();
+  document.getElementById('medMonthsBadge').textContent = matched.length ? matched.map(m=>m.label).join(' + ') : 'ไม่มีข้อมูลยาในช่วงที่เลือก';
+  const monthly = matched.map(m=>({
+    label:m.label,
+    qty: m.drugs.reduce((s,d)=>s+(d.qty||0),0),
+    value: m.drugs.reduce((s,d)=>s+(d.value||0),0)
+  }));
+  const ctx=document.getElementById('chMedMonthly').getContext('2d');
+  charts['chMedMonthly']=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels: monthly.map(m=>m.label),
+      datasets:[
+        { type:'bar', label:'ปริมาณการใช้', data: monthly.map(m=>m.qty), backgroundColor:'#16a34a', yAxisID:'y', order:2,
+          datalabels:{ anchor:'end', align:'top', color:'#15803d', font:{weight:'bold',size:10}, formatter:(v)=>v>0?v.toLocaleString():'' } },
+        { type:'line', label:'มูลค่าการใช้ (บาท)', data: monthly.map(m=>+m.value.toFixed(2)), borderColor:'#0284c7', backgroundColor:'#0284c7', yAxisID:'y1', tension:.3, pointRadius:5, pointBackgroundColor:'#0284c7', order:1,
+          datalabels:{ anchor:'end', align:'bottom', color:'#0369a1', font:{weight:'bold',size:10}, formatter:(v)=>v>0? v.toLocaleString(undefined,{maximumFractionDigits:0}):'' } }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{ legend:{position:'top', labels:{font:{size:11}}} },
+      scales:{
+        y:{ type:'linear', position:'left', title:{display:true,text:'ปริมาณการใช้',font:{size:10}}, ticks:{font:{size:10}} },
+        y1:{ type:'linear', position:'right', title:{display:true,text:'มูลค่าการใช้ (บาท)',font:{size:10}}, ticks:{font:{size:10}}, grid:{drawOnChartArea:false} }
+      }
+    }
+  });
+}
+function renderMedTop10Qty(){
+  const matched = getMatchedMedSheets();
+  const agg = new Map();
+  matched.forEach(m=> m.drugs.forEach(d=>{
+    if(!agg.has(d.name)) agg.set(d.name,{qty:0,value:0});
+    const o = agg.get(d.name); o.qty += (d.qty||0); o.value += (d.value||0);
+  }));
+  const byQty = Array.from(agg.entries()).sort((a,b)=>b[1].qty-a[1].qty).slice(0,10);
+  const ctx=document.getElementById('chMedTop10Qty').getContext('2d');
+  charts['chMedTop10Qty']=new Chart(ctx,{ type:'bar', data:{ labels:byQty.map(a=>a[0]), datasets:[{label:'ปริมาณการใช้',data:byQty.map(a=>a[1].qty),backgroundColor:'#16a34a'}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}, datalabels: DL_BAR_HORIZONTAL}} });
+}
+function renderMedTop10Value(){
+  const matched = getMatchedMedSheets();
+  const agg = new Map();
+  matched.forEach(m=> m.drugs.forEach(d=>{
+    if(!agg.has(d.name)) agg.set(d.name,{qty:0,value:0});
+    const o = agg.get(d.name); o.qty += (d.qty||0); o.value += (d.value||0);
+  }));
+  const byValue = Array.from(agg.entries()).sort((a,b)=>b[1].value-a[1].value).slice(0,10);
+  const ctx=document.getElementById('chMedTop10Value').getContext('2d');
+  charts['chMedTop10Value']=new Chart(ctx,{ type:'bar', data:{ labels:byValue.map(a=>a[0]), datasets:[{label:'มูลค่าการใช้ (บาท)',data:byValue.map(a=>+a[1].value.toFixed(2)),backgroundColor:'#0284c7'}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}, datalabels: DL_BAR_HORIZONTAL}} });
+}
+
+/* ============ REPEAT VISITORS CHART ============ */
+function renderRepeatChart(filtered){
+  const personMap=new Map();
+  filtered.forEach(r=>{
+    if(!personMap.has(r.__personKey)) personMap.set(r.__personKey,{name:F(r,"ชื่อ-สกุล"),count:0,depts:new Set(),diags:new Set()});
+    const p=personMap.get(r.__personKey); p.count++; if(F(r,"แผนก")) p.depts.add(F(r,"แผนก")); if(F(r,"Diag")) p.diags.add(F(r,"Diag"));
+  });
+  const repeaters = Array.from(personMap.entries()).filter(([k,p])=>p.count>1).sort((a,b)=>b[1].count-a[1].count).slice(0,20);
+  const ctx=document.getElementById('chRepeat').getContext('2d');
+  const labels = repeaters.map(([k,p])=>p.name||k);
+  const data = repeaters.map(([k,p])=>p.count);
+  document.getElementById('repeatDetail').style.display='none';
+  charts['chRepeat']=new Chart(ctx,{ type:'bar', data:{labels,datasets:[{label:'จำนวนครั้ง',data,backgroundColor:labels.map((_,i)=>PALETTE[i%PALETTE.length])}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}, datalabels: DL_BAR_HORIZONTAL},
+      onClick:(evt,els)=>{
+        if(els.length){
+          const idx=els[0].index; const [key,p]=repeaters[idx];
+          const box=document.getElementById('repeatDetail');
+          box.style.display='block';
+          box.innerHTML = `<b>${esc(p.name||key)}</b> — มาใช้บริการ ${p.count} ครั้ง<br>
+            <b>แผนก:</b> ${Array.from(p.depts).map(esc).join(', ')||'-'}<br>
+            <b>การวินิจฉัย:</b> ${Array.from(p.diags).map(esc).join(', ')||'-'}`;
+        }
+      } } });
+}
+
+/* ============ TABLE ============ */
+function renderTable(filtered){
+  const cols = CANON;
+  const thead = document.querySelector('#dataTable thead');
+  thead.innerHTML = '<tr>'+cols.map(c=>`<th>${esc(c.replace('\n',' '))}</th>`).join('')+'</tr>';
+  const tbody = document.querySelector('#dataTable tbody');
+  const rowsHtml = filtered.map(r=>'<tr>'+cols.map(c=>{ const v=displayVal(r,c); return `<td title="${esc(v)}">${esc(v)}</td>`; }).join('')+'</tr>').join('');
+  tbody.innerHTML = rowsHtml || `<tr><td colspan="${cols.length}" style="text-align:center;color:#999;">ไม่พบข้อมูลตามเงื่อนไขที่กำหนด</td></tr>`;
+  document.getElementById('rowCountNote').textContent = `พบข้อมูลทั้งหมด ${filtered.length.toLocaleString()} รายการ`;
+}
+</script>
+</body>
+</html>
