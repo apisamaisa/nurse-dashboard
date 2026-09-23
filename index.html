@@ -560,11 +560,15 @@ document.getElementById('fileInput').addEventListener('change', function(e){
       });
       MED_SHEETS = newMedSheets;
 
-      loadMain(mainJson);
       document.getElementById('fileName').textContent = '📄 ' + file.name;
       document.getElementById('emptyState').style.display='none';
       document.getElementById('dashboardContent').style.display='block';
       dataLoaded = true;
+      requestAnimationFrame(()=>{
+        requestAnimationFrame(()=>{
+          loadMain(mainJson);
+        });
+      });
     }catch(err){
       logErr('uploadHandler', err);
       alert('ไม่สามารถอ่านไฟล์ได้ กรุณาตรวจสอบว่าเป็นไฟล์ Excel ที่มี Sheet "บันทึกบริการรายวัน"\n\nรายละเอียดข้อผิดพลาด: ' + err.message);
